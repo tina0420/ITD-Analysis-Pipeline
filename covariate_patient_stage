@@ -1,0 +1,110 @@
+"""
+@author: Tina Hsu
+Experiment: Explore the correlation between patient stages and ITD.
+"""
+from scipy import stats
+
+def as_si(x, ndp):
+    s = '{x:0.{ndp:d}e}'.format(x=x, ndp=ndp)
+    m, e = s.split('e')
+    return r'{m:s}\times 10^{{{e:d}}}'.format(m=m, e=int(e))
+
+def calculate_stages(df, cancer):
+    datas = df[df["Project ID"] == cancer].reset_index(drop=True)
+    test = pd.DataFrame(datas.groupby(by=["ITD", "ajcc_pathologic_stage"]).count()["Case ID"])
+    print(test)
+
+def tidy_stages(stage_counts):
+    stage_label = ["Stage I" , "Stage II", "Stage III", "Stage IV"]*2
+    stage_info_to_plot = pd.DataFrame(stage_label, columns=["Stage"], index=None)
+    stage_info_to_plot["ITD"] = ["ITD+"] *4 +["ITD−"] *4
+
+    stage_info_to_plot["Counts"] = stage_counts
+
+    positive_total = sum(stage_info_to_plot.iloc[0:4,2])
+    negative_total = sum(stage_info_to_plot.iloc[4:8,2])
+    stage_info_to_plot["Percnetage"] = 0
+    for i in range(stage_info_to_plot.shape[0]):
+        if stage_info_to_plot.iloc[i,1] == "ITD+":
+            total_number = positive_total
+            per = round(stage_info_to_plot.iloc[i,2]/total_number*100,2)
+            stage_info_to_plot.iat[i,3] = per
+        else:
+            total_number = negative_total
+            per = round(stage_info_to_plot.iloc[i,2]/total_number*100,2)
+            stage_info_to_plot.iat[i,3] = per
+    return stage_info_to_plot
+
+def plot_stages(cancer, stages_df):
+    stage_info_to_plot = stages_df
+    stage_1_p = stage_info_to_plot.iloc[0,3]
+    stage_1_n = stage_info_to_plot.iloc[4,3]
+    stage_2_p = stage_info_to_plot.iloc[1,3]
+    stage_2_n = stage_info_to_plot.iloc[5,3]
+    stage_3_p = stage_info_to_plot.iloc[2,3]
+    stage_3_n = stage_info_to_plot.iloc[6,3]
+    stage_4_p = stage_info_to_plot.iloc[3,3]
+    stage_4_n = stage_info_to_plot.iloc[7,3]
+
+    total_positive_patient = sum(stage_info_to_plot.loc[0:3,"Counts"])
+    total_negative_patient = sum(stage_info_to_plot.loc[4:7,"Counts"])
+
+    Table = np.array([[stage_1_p, stage_1_n],
+                    [stage_2_p, stage_2_n],
+                    [stage_3_p, stage_3_n],
+                    [stage_4_p, stage_4_n]])
+    chi2, p, dof, ex = stats.chi2_contingency(Table, correction=False)
+
+    n = np.arange(2)
+    plt.figure(figsize=(12,9))
+    plt.title(cancer, fontsize=35, pad=10)
+    plt.ylim([0,119])
+    plt.xticks(n, ("ITD+(n="+str(total_positive_patient)+")", "ITD−(n="+str(total_negative_patient)+")"), fontsize=35)
+    plt.yticks(fontsize=20)
+    plt.ylabel("Percentage (%)", fontsize=30)
+    b1 = plt.bar(n, [stage_1_p, stage_1_n],color='#5975a4')
+    plt.text(n[0],stage_1_p/2,stage_1_p, horizontalalignment="center", weight="bold", fontsize=25)
+    plt.text(n[1],stage_1_n/2,stage_1_n, horizontalalignment="center", weight="bold", fontsize=25)
+    # plt.text(n[0],stage_1_p/2-1,stage_1_p, horizontalalignment="center", weight="bold", fontsize=20)
+    # plt.text(n[1],stage_1_n/2-1,stage_1_n, horizontalalignment="center", weight="bold", fontsize=20)
+
+    b2 = plt.bar(n, [stage_2_p, stage_2_n],color='#cc8963', bottom=[stage_1_p, stage_1_n])
+    plt.text(n[0],stage_1_p+stage_2_p/2,stage_2_p, horizontalalignment="center", weight="bold", fontsize=25)
+    #plt.text(n[0],stage_1_p+stage_2_p/2-1,stage_2_p, horizontalalignment="center", weight="bold", fontsize=20)
+
+    plt.text(n[1],stage_1_n+stage_2_n/2,stage_2_n, horizontalalignment="center", weight="bold", fontsize=25)
+
+    b3 = plt.bar(n, [stage_3_p, stage_3_n],color='#5f9e6e', bottom=[stage_1_p+stage_2_p, stage_1_n+stage_2_n])
+    plt.text(n[0],stage_1_p+stage_2_p+stage_3_p/2,stage_3_p, horizontalalignment="center", weight="bold", fontsize=25)
+    plt.text(n[1],stage_1_n+stage_2_n+stage_3_n/2,stage_3_n, horizontalalignment="center", weight="bold", fontsize=25)
+
+    b4 = plt.bar(n, [stage_4_p, stage_4_n],color='#b55d60', bottom=[stage_1_p+stage_2_p+stage_3_p, stage_1_n+stage_2_n+stage_3_n])
+    plt.text(n[0],stage_1_p+stage_2_p+stage_3_p+stage_4_p/2,stage_4_p, horizontalalignment="center", weight="bold", fontsize=20)
+    plt.text(n[1],stage_1_n+stage_2_n+stage_3_n+stage_4_n/2,stage_4_n, horizontalalignment="center", weight="bold", fontsize=20)
+    #plt.text(n[0],stage_1_p+stage_2_p+stage_3_p+stage_4_p/2-1.3,stage_4_p, horizontalalignment="center", weight="bold", fontsize=25)
+    #plt.text(n[1],stage_1_n+stage_2_n+stage_3_n+stage_4_n/2-1,stage_4_n, horizontalalignment="center", weight="bold", fontsize=25)
+
+
+    plt.text(0.29, 110, r"$p={0:s}$".format(as_si(p, 2)), fontsize=25)
+    # plt.legend((b5[0], b4[0], b3[0], b2[0], b1[0]), ('Stage X', 'Stage IV', 'Stage III', 'Stage II', 'Stage I'), fontsize=17,bbox_to_anchor=(1., 1.0), loc='upper left')
+    plt.legend((b4[0], b3[0], b2[0], b1[0]), ('Stage IV', 'Stage III', 'Stage II', 'Stage I'), fontsize=17,bbox_to_anchor=(1., 1.0), loc='upper left')
+    file_name = "F20_stages_in" + cancer + ".tiff"
+    plt.savefig(file_name, dpi=300, bbox_inches="tight")
+    plt.show()
+
+
+### usage (example)
+calculate_stages(data_for_stag_ajcc, "TCGA-READ")
+to_input = [16,15,14,7, 17,35,36,18]
+stages_df = tidy_stages(to_input)
+plot_stages("TCGA-READ", stages_df)
+
+
+#recoding the numbers:
+# READ: [16,15,14,7, 17,35,36,18]
+# COAD: [18,39,26,27, 55,129,94,35]
+# BRCA: [36,129,45,8, 139,462,197,12]
+# LUSC: [36,25,11,0, 208,138,73,7]
+# KIRC: [22,6,5,2, 174,27,66,41]
+# OV: [14,16,289,65, 3,8,52,7]
+# UCEC: [42,6,11,2, 297,45,112,27]
